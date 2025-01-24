@@ -1,6 +1,7 @@
+import streamlit as st
+import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-import pandas as pd
 import random
 
 # Dummy data kapal
@@ -12,12 +13,12 @@ kapal_data = [
     {"Nama Kapal": "Kapal E", "Jumlah Container": 1500, "ETA": "2025-01-27"}
 ]
 
-# Dummy yard blocks
-yard_blocks = [f"{letter}{str(num).zfill(2)}" for letter in "CBA" for num in range(1, 6)]
+# Dummy yard blocks (rows: C, B, A; columns: 1 to 5)
+yard_blocks = [f"{letter}{num}" for letter in "CBA" for num in range(1, 6)]
 slots_per_block = 37
 containers_per_slot = 30
 
-# Allocate yard function
+# Function: Allocate yard
 def allocate_yard(kapal_df, yard_blocks, slots_per_block, containers_per_slot):
     allocation = []
     used_blocks = set()
@@ -35,6 +36,9 @@ def allocate_yard(kapal_df, yard_blocks, slots_per_block, containers_per_slot):
         for cluster in range(num_clusters):
             # Find an available block
             available_blocks = [block for block in yard_blocks if block not in used_blocks]
+            if not available_blocks:
+                st.warning("Tidak cukup block tersedia untuk semua kapal.")
+                break
             chosen_block = random.choice(available_blocks)
             
             # Allocate containers to this cluster
@@ -51,7 +55,7 @@ def allocate_yard(kapal_df, yard_blocks, slots_per_block, containers_per_slot):
     
     return pd.DataFrame(allocation)
 
-# Visualization function
+# Function: Visualize yard
 def visualize_yard(allocation, yard_blocks):
     fig, ax = plt.subplots(figsize=(12, 6))
 
@@ -66,7 +70,7 @@ def visualize_yard(allocation, yard_blocks):
             x, y = col, row
             ax.add_patch(plt.Rectangle((x, y), 1, 1, edgecolor='black', facecolor='lightgray'))
             block_name = f"{rows[row]}{cols[col]}"
-            ax.text(x + 0.5, y + 0.5, block_name, ha='center', va='center', fontsize=8)
+            ax.text(x + 0.5, y + 0.5, block_name, ha='center', va='center', fontsize=8, weight='bold')
 
     # Assign colors for each kapal
     kapal_colors = {nama: f'#{random.randint(0, 0xFFFFFF):06x}' for nama in allocation["Nama Kapal"].unique()}
@@ -77,7 +81,7 @@ def visualize_yard(allocation, yard_blocks):
         x, y = block_positions[block]
         color = kapal_colors[row["Nama Kapal"]]
         ax.add_patch(plt.Rectangle((x, y), 1, 1, edgecolor='black', facecolor=color))
-        ax.text(x + 0.5, y + 0.5, f"{row['Nama Kapal']}\n{row['Jumlah Container']}", 
+        ax.text(x + 0.5, y + 0.5, f"{row['Nama Kapal']}\n{row['Jumlah Container']} Cont.", 
                 ha='center', va='center', fontsize=7, color='white')
 
     # Legend
@@ -89,10 +93,21 @@ def visualize_yard(allocation, yard_blocks):
     plt.tight_layout()
     return fig
 
-# Alokasi dan visualisasi
-kapal_df = pd.DataFrame(kapal_data)
-yard_allocation = allocate_yard(kapal_df, yard_blocks, slots_per_block, containers_per_slot)
-fig = visualize_yard(yard_allocation, yard_blocks)
+# Streamlit App
+st.set_page_config(layout="wide")
+st.title("Container Yard Allocation")
 
-# Show plot
-plt.show()
+# Input data kapal
+st.subheader("Input Kapal Data")
+kapal_df = pd.DataFrame(kapal_data)
+st.write(kapal_df)
+
+# Alokasi otomatis
+st.subheader("Hasil Alokasi")
+yard_allocation = allocate_yard(kapal_df, yard_blocks, slots_per_block, containers_per_slot)
+st.write(yard_allocation)
+
+# Visualisasi Yard
+st.subheader("Visualisasi Yard")
+fig = visualize_yard(yard_allocation, yard_blocks)
+st.pyplot(fig)
