@@ -15,87 +15,85 @@ kapal_data = [
 
 # Dummy yard blocks (rows: C, B, A; columns: 1 to 5)
 yard_blocks = [f"{letter}{num}" for letter in "CBA" for num in range(1, 6)]
-slots_per_block = 37
-containers_per_slot = 30
+slots_per_block = 37  # Total slots per block
+containers_per_slot = 30  # Max containers per slot
 
-# Function: Allocate yard
+# Allocate yard function
 def allocate_yard(kapal_df, yard_blocks, slots_per_block, containers_per_slot):
     allocation = []
-    used_blocks = set()
+    used_slots = {block: [False] * slots_per_block for block in yard_blocks}
     
     for _, row in kapal_df.iterrows():
         nama_kapal = row["Nama Kapal"]
         total_container = row["Jumlah Container"]
         eta = row["ETA"]
         
-        # Calculate clusters needed
-        cluster_size = slots_per_block * containers_per_slot
-        num_clusters = -(-total_container // cluster_size)  # Ceiling division
         containers_left = total_container
-        
-        for cluster in range(num_clusters):
-            # Find an available block
-            available_blocks = [block for block in yard_blocks if block not in used_blocks]
-            if not available_blocks:
-                st.warning("Tidak cukup block tersedia untuk semua kapal.")
+        for block in yard_blocks:
+            for slot in range(slots_per_block):
+                if not used_slots[block][slot] and containers_left > 0:
+                    containers_in_slot = min(containers_left, containers_per_slot)
+                    allocation.append({
+                        "Nama Kapal": nama_kapal,
+                        "Block": block,
+                        "Slot": slot + 1,
+                        "Jumlah Container": containers_in_slot,
+                        "ETA": eta
+                    })
+                    used_slots[block][slot] = True
+                    containers_left -= containers_in_slot
+                if containers_left <= 0:
+                    break
+            if containers_left <= 0:
                 break
-            chosen_block = random.choice(available_blocks)
-            
-            # Allocate containers to this cluster
-            containers_in_cluster = min(containers_left, cluster_size)
-            allocation.append({
-                "Nama Kapal": nama_kapal,
-                "Block": chosen_block,
-                "Cluster": cluster + 1,
-                "Jumlah Container": containers_in_cluster,
-                "ETA": eta
-            })
-            containers_left -= containers_in_cluster
-            used_blocks.add(chosen_block)
-    
     return pd.DataFrame(allocation)
 
-# Function: Visualize yard
-def visualize_yard(allocation, yard_blocks):
-    fig, ax = plt.subplots(figsize=(12, 6))
+# Visualization function
+def visualize_yard(allocation, yard_blocks, slots_per_block):
+    fig, ax = plt.subplots(figsize=(20, 6))
+    block_positions = {block: i for i, block in enumerate(yard_blocks)}
 
-    # Yard layout: rows and columns
-    rows = ["C", "B", "A"]
-    cols = [1, 2, 3, 4, 5]
-    block_positions = {block: (cols.index(int(block[1:])), rows.index(block[0])) for block in yard_blocks}
-
-    # Draw grid
-    for row in range(len(rows)):
-        for col in range(len(cols)):
-            x, y = col, row
-            ax.add_patch(plt.Rectangle((x, y), 1, 1, edgecolor='black', facecolor='lightgray'))
-            block_name = f"{rows[row]}{cols[col]}"
-            ax.text(x + 0.5, y + 0.5, block_name, ha='center', va='center', fontsize=8, weight='bold')
+    # Draw blocks and slots
+    for block, idx in block_positions.items():
+        for slot in range(slots_per_block):
+            x = idx
+            y = slot
+            ax.add_patch(plt.Rectangle((x, y), 1, 1, edgecolor='black', facecolor='white'))
+            ax.text(x + 0.5, y + 0.5, f"{slot + 1}", ha='center', va='center', fontsize=6)
 
     # Assign colors for each kapal
     kapal_colors = {nama: f'#{random.randint(0, 0xFFFFFF):06x}' for nama in allocation["Nama Kapal"].unique()}
 
-    # Fill blocks with clusters
+    # Fill slots with container data
     for _, row in allocation.iterrows():
         block = row["Block"]
-        x, y = block_positions[block]
-        color = kapal_colors[row["Nama Kapal"]]
+        slot = row["Slot"] - 1
+        jumlah_container = row["Jumlah Container"]
+        nama_kapal = row["Nama Kapal"]
+        color = kapal_colors[nama_kapal]
+        x = block_positions[block]
+        y = slot
         ax.add_patch(plt.Rectangle((x, y), 1, 1, edgecolor='black', facecolor=color))
-        ax.text(x + 0.5, y + 0.5, f"{row['Nama Kapal']}\n{row['Jumlah Container']} Cont.", 
-                ha='center', va='center', fontsize=7, color='white')
+        ax.text(x + 0.5, y + 0.5, f"{nama_kapal}\n{jumlah_container}", ha='center', va='center', fontsize=6, color='white')
+
+    # Format plot
+    ax.set_xlim(-0.5, len(yard_blocks) - 0.5)
+    ax.set_ylim(-0.5, slots_per_block)
+    ax.set_xticks(range(len(yard_blocks)))
+    ax.set_xticklabels(yard_blocks, rotation=90, fontsize=8)
+    ax.set_yticks(range(slots_per_block))
+    ax.set_yticklabels(range(1, slots_per_block + 1), fontsize=6)
+    ax.invert_yaxis()
+    ax.axis('off')
 
     # Legend
     legend_patches = [mpatches.Patch(color=color, label=nama) for nama, color in kapal_colors.items()]
-    ax.legend(handles=legend_patches, loc='lower center', bbox_to_anchor=(0.5, -0.2), ncol=5, fontsize=8)
-
-    ax.axis('off')
-    plt.gca().invert_yaxis()
-    plt.tight_layout()
+    ax.legend(handles=legend_patches, loc='upper right', bbox_to_anchor=(1.2, 1), fontsize=8)
     return fig
 
 # Streamlit App
 st.set_page_config(layout="wide")
-st.title("Container Yard Allocation")
+st.title("Detailed Container Yard Allocation")
 
 # Input data kapal
 st.subheader("Input Kapal Data")
@@ -109,5 +107,5 @@ st.write(yard_allocation)
 
 # Visualisasi Yard
 st.subheader("Visualisasi Yard")
-fig = visualize_yard(yard_allocation, yard_blocks)
+fig = visualize_yard(yard_allocation, yard_blocks, slots_per_block)
 st.pyplot(fig)
