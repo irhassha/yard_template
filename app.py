@@ -50,21 +50,23 @@ def allocate_yard(kapal_df, yard_blocks, slots_per_block, containers_per_slot):
 
 # Visualization function
 def visualize_yard(allocation, yard_blocks, slots_per_block):
-    fig, ax = plt.subplots(figsize=(20, 6))
-    block_positions = {block: i for i, block in enumerate(yard_blocks)}
+    fig, ax = plt.subplots(figsize=(len(yard_blocks) * 2, slots_per_block // 4))
 
-    # Draw blocks and slots
+    # Get unique blocks and their positions
+    block_positions = {block: idx for idx, block in enumerate(yard_blocks)}
+
+    # Draw grid for each block and slot
     for block, idx in block_positions.items():
         for slot in range(slots_per_block):
             x = idx
-            y = slot
+            y = slots_per_block - slot - 1  # Invert y-axis for slot numbering
             ax.add_patch(plt.Rectangle((x, y), 1, 1, edgecolor='black', facecolor='white'))
-            ax.text(x + 0.5, y + 0.5, f"{slot + 1}", ha='center', va='center', fontsize=6)
+            ax.text(x + 0.5, y + 0.5, str(slot + 1), ha='center', va='center', fontsize=6, color='black')
 
     # Assign colors for each kapal
     kapal_colors = {nama: f'#{random.randint(0, 0xFFFFFF):06x}' for nama in allocation["Nama Kapal"].unique()}
 
-    # Fill slots with container data
+    # Fill slots with allocation data
     for _, row in allocation.iterrows():
         block = row["Block"]
         slot = row["Slot"] - 1
@@ -72,21 +74,21 @@ def visualize_yard(allocation, yard_blocks, slots_per_block):
         nama_kapal = row["Nama Kapal"]
         color = kapal_colors[nama_kapal]
         x = block_positions[block]
-        y = slot
+        y = slots_per_block - slot - 1
         ax.add_patch(plt.Rectangle((x, y), 1, 1, edgecolor='black', facecolor=color))
-        ax.text(x + 0.5, y + 0.5, f"{nama_kapal}\n{jumlah_container}", ha='center', va='center', fontsize=6, color='white')
+        ax.text(x + 0.5, y + 0.5, f"{jumlah_container}", ha='center', va='center', fontsize=6, color='white')
 
     # Format plot
     ax.set_xlim(-0.5, len(yard_blocks) - 0.5)
     ax.set_ylim(-0.5, slots_per_block)
     ax.set_xticks(range(len(yard_blocks)))
-    ax.set_xticklabels(yard_blocks, rotation=90, fontsize=8)
+    ax.set_xticklabels(yard_blocks, fontsize=8, rotation=90)
     ax.set_yticks(range(slots_per_block))
-    ax.set_yticklabels(range(1, slots_per_block + 1), fontsize=6)
+    ax.set_yticklabels(range(1, slots_per_block + 1), fontsize=8)
     ax.invert_yaxis()
     ax.axis('off')
 
-    # Legend
+    # Add legend
     legend_patches = [mpatches.Patch(color=color, label=nama) for nama, color in kapal_colors.items()]
     ax.legend(handles=legend_patches, loc='upper right', bbox_to_anchor=(1.2, 1), fontsize=8)
     return fig
