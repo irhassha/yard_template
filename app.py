@@ -21,31 +21,33 @@ containers_per_slot = 30  # Max containers per slot
 # Allocate yard function
 def allocate_yard(kapal_df, yard_blocks, slots_per_block, containers_per_slot):
     allocation = []
-    used_slots = {block: [False] * slots_per_block for block in yard_blocks}
-    
-    for _, row in kapal_df.iterrows():
-        nama_kapal = row["Nama Kapal"]
-        total_container = row["Jumlah Container"]
-        eta = row["ETA"]
-        
-        containers_left = total_container
-        for block in yard_blocks:
-            for slot in range(slots_per_block):
-                if not used_slots[block][slot] and containers_left > 0:
-                    containers_in_slot = min(containers_left, containers_per_slot)
-                    allocation.append({
-                        "Nama Kapal": nama_kapal,
-                        "Block": block,
-                        "Slot": slot + 1,
-                        "Jumlah Container": containers_in_slot,
-                        "ETA": eta
-                    })
-                    used_slots[block][slot] = True
-                    containers_left -= containers_in_slot
-                if containers_left <= 0:
-                    break
-            if containers_left <= 0:
-                break
+    used_blocks = {block: [False] * slots_per_block for block in yard_blocks}
+
+    # Group kapal by ETA
+    grouped_kapal = kapal_df.groupby("ETA")
+    for eta, group in grouped_kapal:
+        available_blocks = yard_blocks.copy()  # Reset available blocks for each ETA
+        for _, row in group.iterrows():
+            nama_kapal = row["Nama Kapal"]
+            total_container = row["Jumlah Container"]
+
+            containers_left = total_container
+            while containers_left > 0 and available_blocks:
+                # Select the first available block
+                chosen_block = available_blocks.pop(0)
+                for slot in range(slots_per_block):
+                    if not used_blocks[chosen_block][slot] and containers_left > 0:
+                        containers_in_slot = min(containers_left, containers_per_slot)
+                        allocation.append({
+                            "Nama Kapal": nama_kapal,
+                            "Block": chosen_block,
+                            "Slot": slot + 1,
+                            "Jumlah Container": containers_in_slot,
+                            "ETA": eta
+                        })
+                        used_blocks[chosen_block][slot] = True
+                        containers_left -= containers_in_slot
+
     return pd.DataFrame(allocation)
 
 # Visualization function
