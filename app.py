@@ -13,7 +13,7 @@ kapal_data = [
     {"Nama Kapal": "Kapal E", "Jumlah Container": 1500, "ETA": "2025-01-27"}
 ]
 
-# Dummy yard blocks (rows: C, B, A; columns: 1 to 5)
+# Dummy yard blocks
 yard_blocks = [f"{letter}{num}" for letter in "CBA" for num in range(1, 6)]
 slots_per_block = 37  # Total slots per block
 containers_per_slot = 30  # Max containers per slot
@@ -52,18 +52,21 @@ def allocate_yard(kapal_df, yard_blocks, slots_per_block, containers_per_slot):
 def visualize_yard(allocation, yard_blocks, slots_per_block):
     fig, ax = plt.subplots(figsize=(20, 10))
 
-    # Block positions grouped by rows (A, B, C)
-    rows = {"A": 2, "B": 1, "C": 0}  # Define rows for each block group
+    # Block positions grouped by rows (C, B, A)
+    rows = {"C": 0, "B": 1, "A": 2}  # Define rows for each block group
     blocks_per_row = len(set([block[1:] for block in yard_blocks]))  # Number of blocks per row
     block_positions = {block: (int(block[1:]) - 1, rows[block[0]]) for block in yard_blocks}
 
     # Draw grid for each block and slot
     for block, (col, row) in block_positions.items():
         for slot in range(slots_per_block):
-            x = col * (slots_per_block + 2) + slot
+            x = col * (slots_per_block + 2) + (slots_per_block - slot - 1)  # Reverse slot numbering
             y = row * 3  # Add spacing between rows
             ax.add_patch(plt.Rectangle((x, y), 1, 1, edgecolor='black', facecolor='white'))
-            ax.text(x + 0.5, y + 0.5, str(slot + 1), ha='center', va='center', fontsize=6, color='black')
+            ax.text(x + 0.5, y + 0.5, str(slots_per_block - slot), ha='center', va='center', fontsize=6, color='black')
+
+        # Add block name below each block
+        ax.text(col * (slots_per_block + 2) + slots_per_block / 2, row * 3 - 1, block, ha='center', va='center', fontsize=10, weight='bold')
 
     # Assign colors for each kapal
     kapal_colors = {nama: f'#{random.randint(0, 0xFFFFFF):06x}' for nama in allocation["Nama Kapal"].unique()}
@@ -76,7 +79,7 @@ def visualize_yard(allocation, yard_blocks, slots_per_block):
         nama_kapal = row["Nama Kapal"]
         color = kapal_colors[nama_kapal]
         col, r = block_positions[block]
-        x = col * (slots_per_block + 2) + slot
+        x = col * (slots_per_block + 2) + (slots_per_block - slot - 1)  # Reverse slot numbering
         y = r * 3
         ax.add_patch(plt.Rectangle((x, y), 1, 1, edgecolor='black', facecolor=color))
         ax.text(x + 0.5, y + 0.5, f"{jumlah_container}", ha='center', va='center', fontsize=6, color='white')
@@ -111,4 +114,4 @@ fig = visualize_yard(yard_allocation, yard_blocks, slots_per_block)
 st.pyplot(fig)
 
 # Fitur Zoom dengan Streamlit Interactive
-st.write("Gunakan tombol zoom di atas visualisasi untuk memperbesar/memperkecil tampilan.")
+st.write("Gunakan toolbar di kanan atas untuk zoom atau geser tampilan.")
