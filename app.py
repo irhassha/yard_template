@@ -50,16 +50,18 @@ def allocate_yard(kapal_df, yard_blocks, slots_per_block, containers_per_slot):
 
 # Visualization function
 def visualize_yard(allocation, yard_blocks, slots_per_block):
-    fig, ax = plt.subplots(figsize=(len(yard_blocks) * 2, slots_per_block // 4))
+    fig, ax = plt.subplots(figsize=(20, 10))
 
-    # Get unique blocks and their positions
-    block_positions = {block: idx for idx, block in enumerate(yard_blocks)}
+    # Block positions grouped by rows (A, B, C)
+    rows = {"A": 2, "B": 1, "C": 0}  # Define rows for each block group
+    blocks_per_row = len(set([block[1:] for block in yard_blocks]))  # Number of blocks per row
+    block_positions = {block: (int(block[1:]) - 1, rows[block[0]]) for block in yard_blocks}
 
     # Draw grid for each block and slot
-    for block, idx in block_positions.items():
+    for block, (col, row) in block_positions.items():
         for slot in range(slots_per_block):
-            x = idx
-            y = slots_per_block - slot - 1  # Invert y-axis for slot numbering
+            x = col * (slots_per_block + 2) + slot
+            y = row * 3  # Add spacing between rows
             ax.add_patch(plt.Rectangle((x, y), 1, 1, edgecolor='black', facecolor='white'))
             ax.text(x + 0.5, y + 0.5, str(slot + 1), ha='center', va='center', fontsize=6, color='black')
 
@@ -73,19 +75,15 @@ def visualize_yard(allocation, yard_blocks, slots_per_block):
         jumlah_container = row["Jumlah Container"]
         nama_kapal = row["Nama Kapal"]
         color = kapal_colors[nama_kapal]
-        x = block_positions[block]
-        y = slots_per_block - slot - 1
+        col, r = block_positions[block]
+        x = col * (slots_per_block + 2) + slot
+        y = r * 3
         ax.add_patch(plt.Rectangle((x, y), 1, 1, edgecolor='black', facecolor=color))
         ax.text(x + 0.5, y + 0.5, f"{jumlah_container}", ha='center', va='center', fontsize=6, color='white')
 
     # Format plot
-    ax.set_xlim(-0.5, len(yard_blocks) - 0.5)
-    ax.set_ylim(-0.5, slots_per_block)
-    ax.set_xticks(range(len(yard_blocks)))
-    ax.set_xticklabels(yard_blocks, fontsize=8, rotation=90)
-    ax.set_yticks(range(slots_per_block))
-    ax.set_yticklabels(range(1, slots_per_block + 1), fontsize=8)
-    ax.invert_yaxis()
+    ax.set_xlim(-1, blocks_per_row * (slots_per_block + 2))
+    ax.set_ylim(-1, len(rows) * 3)
     ax.axis('off')
 
     # Add legend
@@ -111,3 +109,6 @@ st.write(yard_allocation)
 st.subheader("Visualisasi Yard")
 fig = visualize_yard(yard_allocation, yard_blocks, slots_per_block)
 st.pyplot(fig)
+
+# Fitur Zoom dengan Streamlit Interactive
+st.write("Gunakan tombol zoom di atas visualisasi untuk memperbesar/memperkecil tampilan.")
