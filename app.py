@@ -15,31 +15,14 @@ dock_spacing_blocks = 3
 total_columns_with_gaps = (columns_per_section + gap_size) * len(sections) - gap_size
 total_height_with_larger_spacing = rows_per_section + dock_height + dock_spacing_blocks
 
-# =================== GENERATE DUMMY VESSEL DATA ===================
-num_vessels = 10
-berth_locations = ["NP1", "NP2", "NP3"]
-yard_blocks = {
-    "NP1": ["A01", "A02", "A03", "A04"],
-    "NP2": ["B01", "B02", "B03", "B04"],
-    "NP3": ["C01", "C02", "C03", "C04"]
-}
-eta_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-
-vessel_data = []
-for i in range(num_vessels):
-    vessel_name = f"Vessel_{i+1}"
-    total_containers = np.random.randint(300, 1000)
-    cluster_need = np.random.randint(2, 5)
-    eta_vessel = np.random.choice(eta_days)
-    berth_location = np.random.choice(berth_locations)
-    
-    vessel_data.append([vessel_name, total_containers, cluster_need, eta_vessel, berth_location])
-
-df_vessel_dummy = pd.DataFrame(vessel_data, columns=["Vessel Name", "Total Containers", "Cluster Need", "ETA Vessel", "Berth Location"])
-
 # =================== SLOT ALLOCATION FUNCTION ===================
 def allocate_containers_corrected(df_vessel):
     allocation = []
+    yard_blocks = {
+        "NP1": ["A01", "A02", "A03", "A04"],
+        "NP2": ["B01", "B02", "B03", "B04"],
+        "NP3": ["C01", "C02", "C03", "C04"]
+    }
     yard_occupancy = {block: [] for blocks in yard_blocks.values() for block in blocks}
 
     for _, row in df_vessel.iterrows():
@@ -87,56 +70,73 @@ def allocate_containers_corrected(df_vessel):
 
     return pd.DataFrame(allocation)
 
-df_allocation_corrected = allocate_containers_corrected(df_vessel_dummy)
+# =================== STREAMLIT FILE UPLOADER ===================
+st.title("Yard Slot Allocation with Real Vessel Data")
 
-# =================== VISUALIZATION ===================
-st.title("Yard Grid with Corrected Slot Allocation & Berth Visualization")
-st.write("Visualisasi yard grid dengan slot yang dialokasikan dan berth NP1 - NP3.")
+uploaded_file = st.file_uploader("Upload Excel file with vessel data", type=["xlsx"])
 
-vessel_names = df_allocation_corrected["Vessel Name"].unique()
-colors = list(mcolors.TABLEAU_COLORS.values())[:len(vessel_names)]
-vessel_color_map = {vessel: colors[i % len(colors)] for i, vessel in enumerate(vessel_names)}
+if uploaded_file is not None:
+    df_vessel_real = pd.read_excel(uploaded_file)
 
-fig, ax = plt.subplots(figsize=(total_columns_with_gaps * 0.2, total_height_with_larger_spacing * 0.8))
+    # Display uploaded vessel data
+    st.subheader("Uploaded Vessel Data")
+    st.dataframe(df_vessel_real)
 
-for i, section in enumerate(sections):
-    for j in range(rows_per_section):
-        row_label = f"{section}{str(j+1).zfill(2)}"
+    # Automatically allocate slots
+    df_allocation_real = allocate_containers_corrected(df_vessel_real)
+
+    # Display the slot allocation results
+    st.subheader("Slot Allocation Results")
+    st.dataframe(df_allocation_real)
+
+    # =================== VISUALIZATION ===================
+    vessel_names = df_allocation_real["Vessel Name"].unique()
+    colors = list(mcolors.TABLEAU_COLORS.values())[:len(vessel_names)]
+    vessel_color_map = {vessel: colors[i % len(colors)] for i, vessel in enumerate(vessel_names)}
+
+    fig, ax = plt.subplots(figsize=(total_columns_with_gaps * 0.2, total_height_with_larger_spacing * 0.8))
+
+    for i, section in enumerate(sections):
+        for j in range(rows_per_section):
+            row_label = f"{section}{str(j+1).zfill(2)}"
+            x_offset = i * (columns_per_section + gap_size)
+
+            for k in range(columns_per_section):
+                allocated_slots = df_allocation_real[
+                    (df_allocation_real["Block"] == row_label) & (df_allocation_real["Slot"] == k + 1)
+                ]
+                if not allocated_slots.empty:
+                    vessel_name = allocated_slots.iloc[0]["Vessel Name"]
+                    color = vessel_color_map.get(vessel_name, "gray")
+                    rect = plt.Rectangle((x_offset + k, total_height_with_larger_spacing - j - 2 - dock_spacing_blocks), 1, 1,
+                                         edgecolor='black', facecolor=color, linewidth=1)
+                else:
+                    rect = plt.Rectangle((x_offset + k, total_height_with_larger_spacing - j - 2 - dock_spacing_blocks), 1, 1,
+                                         edgecolor='black', facecolor='white', linewidth=1)
+                ax.add_patch(rect)
+
+            ax.text(x_offset - 0.5, total_height_with_larger_spacing - j - 1.5 - dock_spacing_blocks, row_label,
+                    va='center', ha='right', fontsize=10, fontweight='bold')
+
+    # **Menambahkan kembali visualisasi NP1, NP2, NP3**
+    for i, dock_label in enumerate(dock_labels):
         x_offset = i * (columns_per_section + gap_size)
+        rect = plt.Rectangle((x_offset, -dock_height - 1), columns_per_section, dock_height,
+                             edgecolor='black', facecolor='lightgray', linewidth=2)
+        ax.add_patch(rect)
+        ax.text(x_offset + columns_per_section / 2, -dock_height - 0.5, dock_label,
+                va='center', ha='center', fontsize=12, fontweight='bold')
 
-        for k in range(columns_per_section):
-            allocated_slots = df_allocation_corrected[
-                (df_allocation_corrected["Block"] == row_label) & (df_allocation_corrected["Slot"] == k + 1)
-            ]
-            if not allocated_slots.empty:
-                vessel_name = allocated_slots.iloc[0]["Vessel Name"]
-                color = vessel_color_map.get(vessel_name, "gray")
-                rect = plt.Rectangle((x_offset + k, total_height_with_larger_spacing - j - 2 - dock_spacing_blocks), 1, 1,
-                                     edgecolor='black', facecolor=color, linewidth=1)
-            else:
-                rect = plt.Rectangle((x_offset + k, total_height_with_larger_spacing - j - 2 - dock_spacing_blocks), 1, 1,
-                                     edgecolor='black', facecolor='white', linewidth=1)
-            ax.add_patch(rect)
+    ax.set_xlim(-1, total_columns_with_gaps)
+    ax.set_ylim(-dock_height - 2, total_height_with_larger_spacing)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_frame_on(False)
 
-        ax.text(x_offset - 0.5, total_height_with_larger_spacing - j - 1.5 - dock_spacing_blocks, row_label,
-                va='center', ha='right', fontsize=10, fontweight='bold')
+    legend_handles = [plt.Line2D([0], [0], color=vessel_color_map[v], lw=4, label=v) for v in vessel_names]
+    ax.legend(handles=legend_handles, title="Vessel Assignments", loc="upper right")
 
-# **Menambahkan kembali visualisasi NP1, NP2, NP3**
-for i, dock_label in enumerate(dock_labels):
-    x_offset = i * (columns_per_section + gap_size)
-    rect = plt.Rectangle((x_offset, -dock_height - 1), columns_per_section, dock_height,
-                         edgecolor='black', facecolor='lightgray', linewidth=2)
-    ax.add_patch(rect)
-    ax.text(x_offset + columns_per_section / 2, -dock_height - 0.5, dock_label,
-            va='center', ha='center', fontsize=12, fontweight='bold')
+    st.pyplot(fig)
 
-ax.set_xlim(-1, total_columns_with_gaps)
-ax.set_ylim(-dock_height - 2, total_height_with_larger_spacing)
-ax.set_xticks([])
-ax.set_yticks([])
-ax.set_frame_on(False)
-
-legend_handles = [plt.Line2D([0], [0], color=vessel_color_map[v], lw=4, label=v) for v in vessel_names]
-ax.legend(handles=legend_handles, title="Vessel Assignments", loc="upper right")
-
-st.pyplot(fig)
+else:
+    st.write("Please upload an Excel file to proceed.")
