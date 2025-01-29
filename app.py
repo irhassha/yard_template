@@ -69,6 +69,33 @@ def allocate_containers_corrected(df_vessel):
                     yard_occupancy[block].append(slot)
 
     return pd.DataFrame(allocation)
+    
+    # Debugging: Check vessels that were not allocated and total slots used per block
+def debug_allocation(df_vessel, df_allocation):
+    allocated_vessels = set(df_allocation["Vessel Name"].unique())
+    all_vessels = set(df_vessel["Vessel Name"].unique())
+
+    # Find vessels that were not allocated
+    unallocated_vessels = all_vessels - allocated_vessels
+
+    # Count total slots allocated per block
+    slots_used_per_block = df_allocation.groupby("Block")["Slot"].count().reset_index()
+
+    return list(unallocated_vessels), slots_used_per_block
+
+# Run the debug function
+unallocated_vessels, slots_used_per_block = debug_allocation(df_vessel_real, df_allocation_real)
+
+# Display debug information in Streamlit
+st.subheader("🔍 Debugging Info: Unallocated Vessels")
+if unallocated_vessels:
+    st.write("These vessels were **not allocated** due to yard constraints:")
+    st.write(unallocated_vessels)
+else:
+    st.write("✅ All vessels were successfully allocated.")
+
+st.subheader("📊 Debugging Info: Slots Used Per Block")
+st.dataframe(slots_used_per_block)
 
 # =================== STREAMLIT FILE UPLOADER ===================
 st.title("Yard Slot Allocation with Real Vessel Data")
