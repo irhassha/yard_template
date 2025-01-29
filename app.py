@@ -38,7 +38,7 @@ for i in range(num_vessels):
 df_vessel_dummy = pd.DataFrame(vessel_data, columns=["Vessel Name", "Total Containers", "Cluster Need", "ETA Vessel", "Berth Location"])
 
 # =================== SLOT ALLOCATION FUNCTION ===================
-def allocate_containers(df_vessel):
+def allocate_containers_corrected(df_vessel):
     allocation = []
     yard_occupancy = {block: [] for blocks in yard_blocks.values() for block in blocks}
 
@@ -59,9 +59,9 @@ def allocate_containers(df_vessel):
         if free_blocks:
             available_blocks = free_blocks  # Prioritize avoiding yard clash
 
-        # Distribute containers evenly
+        # Calculate required slots per cluster
         containers_per_cluster = total_containers // cluster_need
-        remaining_containers = total_containers % cluster_need
+        slots_per_cluster = np.ceil(containers_per_cluster / 30).astype(int)
 
         for i in range(cluster_need):
             block = available_blocks[i % len(available_blocks)]
@@ -73,29 +73,32 @@ def allocate_containers(df_vessel):
                 slots_in_block = [s for s in slots_in_block if all(abs(s - oc) >= 5 for oc in occupied_slots)]
 
             if slots_in_block:
-                slot = slots_in_block[0]  # Pick the first available slot
+                for _ in range(slots_per_cluster):
+                    if not slots_in_block:
+                        break
+                    slot = slots_in_block.pop(0)  # Pick first available slot
 
-                allocation.append({
-                    "Vessel Name": vessel_name,
-                    "Block": block,
-                    "Slot": slot,
-                    "Containers Assigned": containers_per_cluster + (1 if i < remaining_containers else 0),
-                    "ETA Vessel": eta_vessel,
-                    "Berth Location": berth_location
-                })
+                    allocation.append({
+                        "Vessel Name": vessel_name,
+                        "Block": block,
+                        "Slot": slot,
+                        "Containers Assigned": 30,
+                        "ETA Vessel": eta_vessel,
+                        "Berth Location": berth_location
+                    })
 
-                yard_occupancy[block].append(slot)
+                    yard_occupancy[block].append(slot)
 
     return pd.DataFrame(allocation)
 
-df_allocation = allocate_containers(df_vessel_dummy)
+df_allocation_corrected = allocate_containers_corrected(df_vessel_dummy)
 
 # =================== VISUALIZATION ===================
-st.title("Yard Grid with Slot Allocation Visualization")
+st.title("Yard Grid with Corrected Slot Allocation Visualization")
 st.write("Visualisasi yard grid dengan slot yang dialokasikan berdasarkan aturan prioritas dan yard clash.")
 
 # Assign colors to vessels
-vessel_names = df_allocation["Vessel Name"].unique()
+vessel_names = df_allocation_corrected["Vessel Name"].unique()
 colors = list(mcolors.TABLEAU_COLORS.values())[:len(vessel_names)]
 vessel_color_map = {vessel: colors[i % len(colors)] for i, vessel in enumerate(vessel_names)}
 
@@ -108,10 +111,12 @@ for i, section in enumerate(sections):
         x_offset = i * (columns_per_section + gap_size)
 
         for k in range(columns_per_section):
-            allocated = df_allocation[(df_allocation["Block"] == row_label) & (df_allocation["Slot"] == k + 1)]
-            if not allocated.empty:
-                vessel_name = allocated.iloc[0]["Vessel Name"]
-                color = vessel_color_map[vessel_name]
+            allocated_slots = df_allocation_corrected[
+                (df_allocation_corrected["Block"] == row_label) & (df_allocation_corrected["Slot"] == k + 1)
+            ]
+            if not allocated_slots.empty:
+                vessel_name = allocated_slots.iloc[0]["Vessel Name"]
+                color = vessel_color_map.get(vessel_name, "gray")
                 rect = plt.Rectangle((x_offset + k, total_height_with_larger_spacing - j - 2 - dock_spacing_blocks), 1, 1,
                                      edgecolor='black', facecolor=color, linewidth=1)
             else:
@@ -121,24 +126,6 @@ for i, section in enumerate(sections):
 
         ax.text(x_offset - 0.5, total_height_with_larger_spacing - j - 1.5 - dock_spacing_blocks, row_label,
                 va='center', ha='right', fontsize=10, fontweight='bold')
-
-# Add blank space between yard blocks and docks
-for i in range(dock_spacing_blocks):
-    for section_idx in range(len(sections)):
-        x_offset = section_idx * (columns_per_section + gap_size)
-        for k in range(columns_per_section):
-            rect = plt.Rectangle((x_offset + k, i), 1, 1,
-                                 edgecolor='black', facecolor='white', linewidth=1, linestyle='dotted')
-            ax.add_patch(rect)
-
-# Add dock labels
-for i, dock_label in enumerate(dock_labels):
-    x_offset = i * (columns_per_section + gap_size)
-    rect = plt.Rectangle((x_offset, -dock_height - 1), columns_per_section, dock_height,
-                         edgecolor='black', facecolor='lightgray', linewidth=2)
-    ax.add_patch(rect)
-    ax.text(x_offset + columns_per_section / 2, -dock_height - 0.5, dock_label,
-            va='center', ha='center', fontsize=12, fontweight='bold')
 
 ax.set_xlim(-1, total_columns_with_gaps)
 ax.set_ylim(-dock_height - 2, total_height_with_larger_spacing)
