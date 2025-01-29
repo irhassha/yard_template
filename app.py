@@ -111,6 +111,23 @@ if uploaded_file is not None:
 
     # Automatically allocate slots
     df_allocation_real = allocate_containers_corrected(df_vessel_real)
+    
+    if "df_allocation_real" in locals():
+    # Run the debug function only if df_allocation_real exists
+    unallocated_vessels, slots_used_per_block = debug_allocation(df_vessel_real, df_allocation_real)
+
+    # Display debug information in Streamlit
+    st.subheader("🔍 Debugging Info: Unallocated Vessels")
+    if unallocated_vessels:
+        st.write("These vessels were **not allocated** due to yard constraints:")
+        st.write(unallocated_vessels)
+    else:
+        st.write("✅ All vessels were successfully allocated.")
+
+    st.subheader("📊 Debugging Info: Slots Used Per Block")
+    st.dataframe(slots_used_per_block)
+else:
+    st.warning("⚠️ Slot allocation has not been completed. Please check your input data.")
 
     # Display the slot allocation results
     st.subheader("Slot Allocation Results")
