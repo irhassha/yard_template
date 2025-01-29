@@ -15,8 +15,8 @@ dock_spacing_blocks = 3
 total_columns_with_gaps = (columns_per_section + gap_size) * len(sections) - gap_size
 total_height_with_larger_spacing = rows_per_section + dock_height + dock_spacing_blocks
 
-# =================== SLOT ALLOCATION FUNCTION (Optimized) ===================
-def allocate_containers_optimized(df_vessel):
+# =================== SLOT ALLOCATION FUNCTION (Fixed) ===================
+def allocate_containers_fixed(df_vessel):
     allocation = []
     yard_blocks = {
         "NP1": ["A01", "A02", "A03", "A04"],
@@ -34,12 +34,14 @@ def allocate_containers_optimized(df_vessel):
 
         available_blocks = yard_blocks[berth_location].copy()
 
+        # Avoid Yard Clash by checking occupied blocks today
         occupied_blocks_today = [alloc["Block"] for alloc in allocation if alloc["ETA Vessel"] == eta_vessel]
         free_blocks = [block for block in available_blocks if block not in occupied_blocks_today]
 
         if free_blocks:
             available_blocks = free_blocks
 
+        # Calculate required slots per cluster
         containers_per_cluster = total_containers // cluster_need
         slots_per_cluster = np.ceil(containers_per_cluster / 30).astype(int)
 
@@ -47,10 +49,10 @@ def allocate_containers_optimized(df_vessel):
             block = available_blocks[i % len(available_blocks)]
             slots_in_block = list(range(1, 38))
 
-            # Allow vessels with different ETA to use gaps
+            # Adjust slot allocation to better use available gaps
             occupied_slots = yard_occupancy[block]
             slots_in_block = [s for s in slots_in_block if all(abs(s - oc) >= 5 for oc in occupied_slots)
-                              or all(alloc["ETA Vessel"] != eta_vessel for alloc in allocation if alloc["Block"] == block and alloc["Slot"] == s)]
+                              or any(alloc["ETA Vessel"] != eta_vessel for alloc in allocation if alloc["Block"] == block and abs(alloc["Slot"] - s) >= 5)]
 
             if slots_in_block:
                 for _ in range(slots_per_cluster):
@@ -72,7 +74,7 @@ def allocate_containers_optimized(df_vessel):
     return pd.DataFrame(allocation)
 
 # =================== STREAMLIT FILE UPLOADER ===================
-st.title("Yard Slot Allocation (Optimized)")
+st.title("Yard Slot Allocation (Fixed & Optimized)")
 
 uploaded_file = st.file_uploader("Upload Excel file with vessel data", type=["xlsx"])
 
@@ -83,15 +85,42 @@ if uploaded_file is not None:
     st.subheader("Uploaded Vessel Data")
     st.dataframe(df_vessel_real)
 
-    # Allocate slots based on uploaded data (Optimized version)
-    df_allocation_optimized = allocate_containers_optimized(df_vessel_real)
+    # Allocate slots based on uploaded data (Fixed version)
+    df_allocation_fixed = allocate_containers_fixed(df_vessel_real)
 
     # Display the slot allocation results
-    st.subheader("Optimized Slot Allocation Results")
-    st.dataframe(df_allocation_optimized)
+    st.subheader("Fixed Slot Allocation Results")
+    st.dataframe(df_allocation_fixed)
+
+    # =================== DEBUGGING SECTION ===================
+    def debug_allocation(df_vessel, df_allocation):
+        allocated_vessels = set(df_allocation["Vessel Name"].unique())
+        all_vessels = set(df_vessel["Vessel Name"].unique())
+
+        # Find vessels that were not allocated
+        unallocated_vessels = all_vessels - allocated_vessels
+
+        # Count total slots allocated per block
+        slots_used_per_block = df_allocation.groupby("Block")["Slot"].count().reset_index()
+
+        return list(unallocated_vessels), slots_used_per_block
+
+    # Run debugging checks
+    unallocated_vessels, slots_used_per_block = debug_allocation(df_vessel_real, df_allocation_fixed)
+
+    # Show debugging results
+    st.subheader("🔍 Debugging Info: Unallocated Vessels")
+    if unallocated_vessels:
+        st.write("These vessels were **not allocated** due to yard constraints:")
+        st.write(unallocated_vessels)
+    else:
+        st.write("✅ All vessels were successfully allocated.")
+
+    st.subheader("📊 Debugging Info: Slots Used Per Block")
+    st.dataframe(slots_used_per_block)
 
     # =================== VISUALIZATION ===================
-    vessel_names = df_allocation_optimized["Vessel Name"].unique()
+    vessel_names = df_allocation_fixed["Vessel Name"].unique()
     colors = list(mcolors.TABLEAU_COLORS.values())[:len(vessel_names)]
     vessel_color_map = {vessel: colors[i % len(colors)] for i, vessel in enumerate(vessel_names)}
 
@@ -103,8 +132,8 @@ if uploaded_file is not None:
             x_offset = i * (columns_per_section + gap_size)
 
             for k in range(columns_per_section):
-                allocated_slots = df_allocation_optimized[
-                    (df_allocation_optimized["Block"] == row_label) & (df_allocation_optimized["Slot"] == k + 1)
+                allocated_slots = df_allocation_fixed[
+                    (df_allocation_fixed["Block"] == row_label) & (df_allocation_fixed["Slot"] == k + 1)
                 ]
                 if not allocated_slots.empty:
                     vessel_name = allocated_slots.iloc[0]["Vessel Name"]
