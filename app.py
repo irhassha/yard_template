@@ -25,17 +25,22 @@ def allocate_containers_with_gradual_arrival(df_vessel):
     }
     yard_occupancy = {block: [] for blocks in yard_blocks.values() for block in blocks}
 
+    df_vessel["ETA Vessel"] = pd.to_numeric(df_vessel["ETA Vessel"], errors="coerce")
+
     for _, row in df_vessel.iterrows():
         vessel_name = row["Vessel Name"]
         total_containers = row["Total Containers"]
         cluster_need = row["Cluster Need"]
         eta_vessel = row["ETA Vessel"]
         berth_location = row["Berth Location"]
-        
+
+        if pd.isna(eta_vessel):
+            continue
+
         # Determine restricted blocks during the 5-day pre-ETA period
         restricted_blocks = []
         for alloc in allocation:
-            if (alloc["ETA Vessel"] >= eta_vessel - 5) and (alloc["ETA Vessel"] <= eta_vessel):
+            if alloc["ETA Vessel"] is not None and (alloc["ETA Vessel"] >= eta_vessel - 5) and (alloc["ETA Vessel"] <= eta_vessel):
                 restricted_blocks.append(alloc["Block"])
 
         available_blocks = [block for block in yard_blocks[berth_location] if block not in restricted_blocks]
@@ -85,7 +90,7 @@ def allocate_containers_with_gradual_arrival(df_vessel):
     return pd.DataFrame(allocation)
 
 # =================== STREAMLIT FILE UPLOADER ===================
-st.title("Yard Slot Allocation with Gradual Arrival & Plan A/B")
+st.title("Yard Slot Allocation with Gradual Arrival")
 
 uploaded_file = st.file_uploader("Upload Excel file with vessel data", type=["xlsx"])
 
@@ -122,50 +127,9 @@ if uploaded_file is not None:
     st.subheader("📊 Debugging Info: Slots Used Per Block")
     st.dataframe(slots_used_per_block)
 
-    # =================== VISUALIZATION FUNCTION ===================
-    def visualize_yard(df_allocation, title):
-        vessel_names = df_allocation["Vessel Name"].unique()
-        colors = list(mcolors.TABLEAU_COLORS.values())[:len(vessel_names)]
-        vessel_color_map = {vessel: colors[i % len(colors)] for i, vessel in enumerate(vessel_names)}
-
-        fig, ax = plt.subplots(figsize=(total_columns_with_gaps * 0.2, total_height_with_larger_spacing * 0.8))
-
-        for i, section in enumerate(sections):
-            for j in range(rows_per_section):
-                row_label = f"{section}{str(j+1).zfill(2)}"
-                x_offset = i * (columns_per_section + gap_size)
-
-                for k in range(columns_per_section):
-                    allocated_slots = df_allocation[
-                        (df_allocation["Block"] == row_label) & (df_allocation["Slot"] == k + 1)
-                    ]
-                    if not allocated_slots.empty:
-                        vessel_name = allocated_slots.iloc[0]["Vessel Name"]
-                        color = vessel_color_map.get(vessel_name, "gray")
-                        rect = plt.Rectangle((x_offset + k, total_height_with_larger_spacing - j - 2 - dock_spacing_blocks), 1, 1,
-                                             edgecolor='black', facecolor=color, linewidth=1)
-                    else:
-                        rect = plt.Rectangle((x_offset + k, total_height_with_larger_spacing - j - 2 - dock_spacing_blocks), 1, 1,
-                                             edgecolor='black', facecolor='white', linewidth=1)
-                    ax.add_patch(rect)
-
-                ax.text(x_offset - 0.5, total_height_with_larger_spacing - j - 1.5 - dock_spacing_blocks, row_label,
-                        va='center', ha='right', fontsize=10, fontweight='bold')
-
-        ax.set_xlim(-1, total_columns_with_gaps)
-        ax.set_ylim(-dock_height - 2, total_height_with_larger_spacing)
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_frame_on(False)
-
-        legend_handles = [plt.Line2D([0], [0], color=vessel_color_map[v], lw=4, label=v) for v in vessel_names]
-        ax.legend(handles=legend_handles, title="Vessel Assignments", loc="upper right")
-
-        st.subheader(title)
-        st.pyplot(fig)
-
-    # Display visualizations
-    visualize_yard(df_allocation_gradual, "Plan A - Initial Allocation")
+    # =================== DISPLAY ALLOCATION RESULT ===================
+    st.subheader("Final Slot Allocation")
+    st.dataframe(df_allocation_gradual)
 
 else:
     st.write("Please upload an Excel file to proceed.")
