@@ -30,7 +30,7 @@ def preprocess_eta_column(df_vessel):
     return df_vessel
 
 # =================== SLOT ALLOCATION FUNCTION ===================
-def allocate_containers_with_fixed_eta(df_vessel):
+def allocate_containers_with_updated_logic(df_vessel):
     allocation = []
     restricted_info = []
     yard_blocks = {
@@ -38,7 +38,8 @@ def allocate_containers_with_fixed_eta(df_vessel):
         "NP2": ["B01", "B02", "B03", "B04"],
         "NP3": ["C01", "C02", "C03", "C04"]
     }
-    yard_occupancy = {block: [] for blocks in yard_blocks.values() for block in blocks}
+    all_blocks = ["A01", "A02", "A03", "A04", "B01", "B02", "B03", "B04", "C01", "C02", "C03", "C04"]
+    yard_occupancy = {block: [] for block in all_blocks}
 
     df_vessel = preprocess_eta_column(df_vessel)
 
@@ -54,19 +55,17 @@ def allocate_containers_with_fixed_eta(df_vessel):
 
         restricted_blocks = []
         for alloc in allocation:
-            if alloc["ETA Vessel"] is not None and (alloc["ETA Vessel"] >= eta_vessel - 5) and (alloc["ETA Vessel"] <= eta_vessel):
+            if alloc["ETA Vessel"] >= eta_vessel - 5 and alloc["ETA Vessel"] <= eta_vessel:
                 restricted_blocks.append(alloc["Block"])
 
-        available_blocks = [block for block in yard_blocks[berth_location] if block not in restricted_blocks]
+        primary_blocks = yard_blocks.get(berth_location, all_blocks)  
+        available_blocks = [block for block in primary_blocks if block not in restricted_blocks]
+        alternative_blocks = [block for block in all_blocks if block not in restricted_blocks]
 
         if not available_blocks:
-            restricted_info.append({"Vessel Name": vessel_name, "ETA Vessel": eta_vessel, "Restricted Blocks": restricted_blocks})
-            continue
+            available_blocks = alternative_blocks  
 
-        must_have_alternative = len(available_blocks) < cluster_need
-        alternative_blocks = [block for block in yard_blocks[berth_location] if block not in restricted_blocks] if must_have_alternative else available_blocks
-
-        if not alternative_blocks:
+        if not available_blocks:
             restricted_info.append({"Vessel Name": vessel_name, "ETA Vessel": eta_vessel, "Message": "No alternative blocks available"})
             continue
 
@@ -101,7 +100,7 @@ if uploaded_file is not None:
     df_vessel_real = pd.read_excel(uploaded_file)
     df_vessel_real = preprocess_eta_column(df_vessel_real)
 
-    df_allocation_fixed_eta, df_restricted_blocks_fixed = allocate_containers_with_fixed_eta(df_vessel_real)
+    df_allocation_updated, df_restricted_blocks_updated = allocate_containers_with_updated_logic(df_vessel_real)
 
     # =================== VISUALIZATION FUNCTION ===================
     def visualize_yard(df_allocation, title):
@@ -138,16 +137,16 @@ if uploaded_file is not None:
 
     # =================== DISPLAY VISUALIZATION & DEBUGGING ===================
     st.subheader("Plan A - Initial Allocation")
-    visualize_yard(df_allocation_fixed_eta, "Plan A - Initial Allocation")
+    visualize_yard(df_allocation_updated, "Plan A - Initial Allocation")
 
     st.subheader("Plan B - Overlapping Allocation")
-    visualize_yard(df_allocation_fixed_eta, "Plan B - Overlapping Allocation")
+    visualize_yard(df_allocation_updated, "Plan B - Overlapping Allocation")
 
     st.subheader("Debugging Info: Restricted Blocks")
-    st.dataframe(df_restricted_blocks_fixed)
+    st.dataframe(df_restricted_blocks_updated)
 
     st.subheader("Final Slot Allocation")
-    st.dataframe(df_allocation_fixed_eta)
+    st.dataframe(df_allocation_updated)
 
 else:
     st.write("Please upload an Excel file to proceed.")
