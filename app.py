@@ -16,7 +16,10 @@ total_columns_with_gaps = (columns_per_section + gap_size) * len(sections) - gap
 total_height_with_larger_spacing = rows_per_section + dock_height + dock_spacing_blocks
 
 # =================== FIX: Preprocess ETA Vessel ===================
-def preprocess_eta_column(df_vessel):
+def preprocess_eta_column_final(df_vessel):
+    """ Convert ETA Vessel column safely to integer format, handling both text and float issues. """
+    df_vessel["ETA Vessel"] = df_vessel["ETA Vessel"].astype(str).str.strip()
+    df_vessel["ETA Vessel"] = df_vessel["ETA Vessel"].str.split(".").str[0]
     df_vessel["ETA Vessel"] = pd.to_datetime(df_vessel["ETA Vessel"], format="%Y%m%d", errors="coerce")
 
     if df_vessel["ETA Vessel"].isna().all():
@@ -25,7 +28,7 @@ def preprocess_eta_column(df_vessel):
     min_eta = df_vessel["ETA Vessel"].min()
     df_vessel["ETA Vessel"].fillna(min_eta, inplace=True)
 
-    df_vessel["ETA Vessel"] = df_vessel["ETA Vessel"].dt.strftime('%j').astype(int)
+    df_vessel["ETA Vessel"] = df_vessel["ETA Vessel"].dt.strftime('%Y%m%d').astype(int)
 
     return df_vessel
 
@@ -41,7 +44,7 @@ def allocate_containers_with_updated_logic(df_vessel):
     all_blocks = ["A01", "A02", "A03", "A04", "B01", "B02", "B03", "B04", "C01", "C02", "C03", "C04"]
     yard_occupancy = {block: [] for block in all_blocks}
 
-    df_vessel = preprocess_eta_column(df_vessel)
+    df_vessel = preprocess_eta_column_final(df_vessel)
 
     for _, row in df_vessel.iterrows():
         vessel_name = row["Vessel Name"]
@@ -92,56 +95,17 @@ def allocate_containers_with_updated_logic(df_vessel):
     return pd.DataFrame(allocation), pd.DataFrame(restricted_info)
 
 # =================== STREAMLIT FILE UPLOADER ===================
-st.title("Yard Slot Allocation with Plan A & B")
+st.title("Yard Slot Allocation with Fixed ETA & Flexible Blocks")
 
 uploaded_file = st.file_uploader("Upload Excel file with vessel data", type=["xlsx"])
 
 if uploaded_file is not None:
     df_vessel_real = pd.read_excel(uploaded_file)
-    df_vessel_real = preprocess_eta_column(df_vessel_real)
+    df_vessel_real = preprocess_eta_column_final(df_vessel_real)
 
     df_allocation_updated, df_restricted_blocks_updated = allocate_containers_with_updated_logic(df_vessel_real)
 
-    # =================== VISUALIZATION FUNCTION ===================
-    def visualize_yard(df_allocation, title):
-        vessel_names = df_allocation["Vessel Name"].unique()
-        colors = list(mcolors.TABLEAU_COLORS.values())[:len(vessel_names)]
-        vessel_color_map = {vessel: colors[i % len(colors)] for i, vessel in enumerate(vessel_names)}
-
-        fig, ax = plt.subplots(figsize=(total_columns_with_gaps * 0.2, total_height_with_larger_spacing * 0.8))
-
-        for i, section in enumerate(sections):
-            for j in range(rows_per_section):
-                row_label = f"{section}{str(j+1).zfill(2)}"
-                x_offset = i * (columns_per_section + gap_size)
-
-                for k in range(columns_per_section):
-                    allocated_slots = df_allocation[(df_allocation["Block"] == row_label) & (df_allocation["Slot"] == k + 1)]
-                    color = vessel_color_map.get(allocated_slots.iloc[0]["Vessel Name"], "gray") if not allocated_slots.empty else "white"
-                    rect = plt.Rectangle((x_offset + k, total_height_with_larger_spacing - j - 2 - dock_spacing_blocks), 1, 1, edgecolor='black', facecolor=color, linewidth=1)
-                    ax.add_patch(rect)
-
-                ax.text(x_offset - 0.5, total_height_with_larger_spacing - j - 1.5 - dock_spacing_blocks, row_label, va='center', ha='right', fontsize=10, fontweight='bold')
-
-        ax.set_xlim(-1, total_columns_with_gaps)
-        ax.set_ylim(-dock_height - 2, total_height_with_larger_spacing)
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_frame_on(False)
-
-        legend_handles = [plt.Line2D([0], [0], color=vessel_color_map[v], lw=4, label=v) for v in vessel_names]
-        ax.legend(handles=legend_handles, title="Vessel Assignments", loc="upper right")
-
-        st.subheader(title)
-        st.pyplot(fig)
-
-    # =================== DISPLAY VISUALIZATION & DEBUGGING ===================
-    st.subheader("Plan A - Initial Allocation")
-    visualize_yard(df_allocation_updated, "Plan A - Initial Allocation")
-
-    st.subheader("Plan B - Overlapping Allocation")
-    visualize_yard(df_allocation_updated, "Plan B - Overlapping Allocation")
-
+    # =================== DISPLAY DEBUGGING INFO ===================
     st.subheader("Debugging Info: Restricted Blocks")
     st.dataframe(df_restricted_blocks_updated)
 
