@@ -87,7 +87,7 @@ def allocate_containers_with_gradual_arrival(df_vessel):
 
                     yard_occupancy[block].append(slot)
 
-    return pd.DataFrame(allocation)
+    return pd.DataFrame(allocation, columns=["Vessel Name", "Block", "Slot", "Containers Assigned", "ETA Vessel", "Berth Location"])
 
 # =================== STREAMLIT FILE UPLOADER ===================
 st.title("Yard Slot Allocation with Gradual Arrival")
@@ -113,23 +113,27 @@ if uploaded_file is not None:
 
         return list(unallocated_vessels), slots_used_per_block
 
-    # Run debugging checks
-    unallocated_vessels, slots_used_per_block = debug_allocation(df_vessel_real, df_allocation_gradual)
+    if not df_allocation_gradual.empty:
+        # Run debugging checks
+        unallocated_vessels, slots_used_per_block = debug_allocation(df_vessel_real, df_allocation_gradual)
 
-    # Show debugging results
-    st.subheader("🔍 Debugging Info: Unallocated Vessels")
-    if unallocated_vessels:
-        st.write("These vessels were **not allocated** due to yard constraints:")
-        st.write(unallocated_vessels)
+        # Show debugging results
+        st.subheader("Debugging Info: Unallocated Vessels")
+        if unallocated_vessels:
+            st.write("These vessels were not allocated due to yard constraints:")
+            st.write(unallocated_vessels)
+        else:
+            st.write("All vessels were successfully allocated.")
+
+        st.subheader("Debugging Info: Slots Used Per Block")
+        st.dataframe(slots_used_per_block)
+
+        # Display allocation result
+        st.subheader("Final Slot Allocation")
+        st.dataframe(df_allocation_gradual)
     else:
-        st.write("✅ All vessels were successfully allocated.")
-
-    st.subheader("📊 Debugging Info: Slots Used Per Block")
-    st.dataframe(slots_used_per_block)
-
-    # =================== DISPLAY ALLOCATION RESULT ===================
-    st.subheader("Final Slot Allocation")
-    st.dataframe(df_allocation_gradual)
+        st.subheader("⚠️ No vessels were allocated.")
+        st.write("All blocks may be restricted due to the gradual arrival rule or yard constraints.")
 
 else:
     st.write("Please upload an Excel file to proceed.")
