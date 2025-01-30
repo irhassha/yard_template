@@ -15,25 +15,6 @@ dock_spacing_blocks = 3
 total_columns_with_gaps = (columns_per_section + gap_size) * len(sections) - gap_size
 total_height_with_larger_spacing = rows_per_section + dock_height + dock_spacing_blocks
 
-# =================== FIX: Preprocess ETA Vessel to Day-of-Year ===================
-def preprocess_eta_column_to_day_of_year(df_vessel):
-    """ Convert ETA Vessel column to day-of-year format safely. """
-    df_vessel["ETA Vessel"] = df_vessel["ETA Vessel"].astype(str).str.strip()
-    df_vessel["ETA Vessel"] = df_vessel["ETA Vessel"].str.replace(",", "", regex=True)
-    df_vessel["ETA Vessel"] = df_vessel["ETA Vessel"].str.split(".").str[0]
-    df_vessel["ETA Vessel"] = pd.to_datetime(df_vessel["ETA Vessel"], format="%Y%m%d", errors="coerce")
-
-    if df_vessel["ETA Vessel"].isna().all():
-        df_vessel["ETA Vessel"] = pd.to_datetime("2025-01-01")
-
-    min_eta = df_vessel["ETA Vessel"].min()
-    df_vessel["ETA Vessel"].fillna(min_eta, inplace=True)
-
-    # Convert ETA to day-of-year format (e.g., 2024-02-08 -> 39)
-    df_vessel["ETA Vessel"] = df_vessel["ETA Vessel"].dt.dayofyear
-
-    return df_vessel
-
 # =================== SLOT ALLOCATION FUNCTION ===================
 def allocate_containers_with_updated_logic(df_vessel):
     allocation = []
@@ -46,13 +27,11 @@ def allocate_containers_with_updated_logic(df_vessel):
     all_blocks = ["A01", "A02", "A03", "A04", "B01", "B02", "B03", "B04", "C01", "C02", "C03", "C04"]
     yard_occupancy = {block: [] for block in all_blocks}
 
-    df_vessel = preprocess_eta_column_to_day_of_year(df_vessel)
-
     for _, row in df_vessel.iterrows():
         vessel_name = row["Vessel Name"]
         total_containers = row["Total Containers"]
         cluster_need = row["Cluster Need"]
-        eta_vessel = row["ETA Vessel"]
+        eta_vessel = row["ETA Vessel"]  # ETA Vessel sekarang dalam Day-of-Year (angka)
         berth_location = row["Berth Location"]
 
         if pd.isna(eta_vessel):
@@ -99,20 +78,23 @@ def allocate_containers_with_updated_logic(df_vessel):
 # =================== STREAMLIT FILE UPLOADER ===================
 st.title("Yard Slot Allocation with Fixed ETA (Day-of-Year) & Flexible Blocks")
 
-uploaded_file = st.file_uploader("Upload Excel file with vessel data", type=["xlsx"])
+uploaded_file = st.file_uploader("Upload Excel file with vessel data (ETA in Day-of-Year format)", type=["xlsx"])
 
 if uploaded_file is not None:
     df_vessel_real = pd.read_excel(uploaded_file)
-    df_vessel_real = preprocess_eta_column_to_day_of_year(df_vessel_real)
 
-    df_allocation_updated, df_restricted_blocks_updated = allocate_containers_with_updated_logic(df_vessel_real)
+    # Pastikan ETA Vessel sudah dalam format Day-of-Year di Excel
+    if not pd.api.types.is_numeric_dtype(df_vessel_real["ETA Vessel"]):
+        st.error("Error: Pastikan kolom ETA Vessel di Excel sudah dalam format angka (Day-of-Year).")
+    else:
+        df_allocation_updated, df_restricted_blocks_updated = allocate_containers_with_updated_logic(df_vessel_real)
 
-    # =================== DISPLAY DEBUGGING INFO ===================
-    st.subheader("Debugging Info: Restricted Blocks")
-    st.dataframe(df_restricted_blocks_updated)
+        # =================== DISPLAY DEBUGGING INFO ===================
+        st.subheader("Debugging Info: Restricted Blocks")
+        st.dataframe(df_restricted_blocks_updated)
 
-    st.subheader("Final Slot Allocation")
-    st.dataframe(df_allocation_updated)
+        st.subheader("Final Slot Allocation")
+        st.dataframe(df_allocation_updated)
 
 else:
     st.write("Please upload an Excel file to proceed.")
