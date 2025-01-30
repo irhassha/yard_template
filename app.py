@@ -15,6 +15,30 @@ dock_spacing_blocks = 3
 total_columns_with_gaps = (columns_per_section + gap_size) * len(sections) - gap_size
 total_height_with_larger_spacing = rows_per_section + dock_height + dock_spacing_blocks
 
+# =================== FIX: Ensure application reads 'ETA Day' or 'ETA Vessel' ===================
+def preprocess_eta_column_flexible(df_vessel):
+    """ Convert ETA Vessel or ETA Day column safely while ensuring proper date parsing. """
+    # Check if 'ETA Day' exists (new column after manual Excel edit)
+    if "ETA Day" in df_vessel.columns:
+        eta_column = "ETA Day"
+    elif "ETA Vessel" in df_vessel.columns:
+        eta_column = "ETA Vessel"
+    else:
+        raise KeyError("Neither 'ETA Vessel' nor 'ETA Day' found in uploaded file. Please check the column names.")
+
+    # Ensure ETA column is numeric
+    df_vessel[eta_column] = pd.to_numeric(df_vessel[eta_column], errors="coerce")
+
+    # Check if there are NaN values and handle them
+    if df_vessel[eta_column].isna().any():
+        print("Warning: Some ETA values are missing or incorrect!")
+        df_vessel[eta_column].fillna(df_vessel[eta_column].dropna().min(), inplace=True)
+
+    # Rename to a standard column name for further processing
+    df_vessel.rename(columns={eta_column: "ETA Vessel"}, inplace=True)
+
+    return df_vessel
+
 # =================== SLOT ALLOCATION FUNCTION ===================
 def allocate_containers_with_updated_logic(df_vessel):
     allocation = []
@@ -84,8 +108,10 @@ if uploaded_file is not None:
     df_vessel_real = pd.read_excel(uploaded_file)
 
     # Pastikan ETA Vessel sudah dalam format Day-of-Year di Excel
+    df_vessel_real = preprocess_eta_column_flexible(df_vessel_real)
+
     if not pd.api.types.is_numeric_dtype(df_vessel_real["ETA Vessel"]):
-        st.error("Error: Pastikan kolom ETA Vessel di Excel sudah dalam format angka (Day-of-Year).")
+        st.error("Error: Pastikan kolom ETA Vessel atau ETA Day di Excel sudah dalam format angka (Day-of-Year).")
     else:
         df_allocation_updated, df_restricted_blocks_updated = allocate_containers_with_updated_logic(df_vessel_real)
 
