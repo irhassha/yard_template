@@ -124,3 +124,19 @@ if uploaded_file is not None:
 
 else:
     st.write("Please upload an Excel file to proceed.")
+    
+        # =================== DISPLAY VISUALIZATION & DEBUGGING ===================
+    st.subheader("Plan A - Initial Allocation")
+    visualize_yard(df_allocation_updated, "Plan A - Initial Allocation")
+
+    st.subheader("Plan B - Overlapping Allocation")
+    visualize_yard(df_allocation_updated, "Plan B - Overlapping Allocation")
+
+    st.subheader("Debugging Info: Restricted Blocks")
+    st.dataframe(df_restricted_blocks_updated)
+
+    st.subheader("Final Slot Allocation")
+    st.dataframe(df_allocation_updated)
+
+else:
+    st.write("Please upload an Excel file to proceed.")
