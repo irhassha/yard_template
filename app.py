@@ -100,15 +100,20 @@ def allocate_containers_with_updated_logic(df_vessel):
     return pd.DataFrame(allocation), pd.DataFrame(restricted_info)
 
 # =================== STREAMLIT FILE UPLOADER ===================
-st.title("Yard Slot Allocation with Plan A & B")
+st.title("Yard Slot Allocation with Fixed ETA (Day-of-Year) & Flexible Blocks")
 
-uploaded_file = st.file_uploader("Upload Excel file with vessel data", type=["xlsx"])
+uploaded_file = st.file_uploader("Upload Excel file with vessel data (ETA in Day-of-Year format)", type=["xlsx"])
 
 if uploaded_file is not None:
     df_vessel_real = pd.read_excel(uploaded_file)
-    df_vessel_real = preprocess_eta_column(df_vessel_real)
 
-    df_allocation_updated, df_restricted_blocks_updated = allocate_containers_with_updated_logic(df_vessel_real)
+    # Pastikan ETA Vessel sudah dalam format Day-of-Year di Excel
+    df_vessel_real = preprocess_eta_column_flexible(df_vessel_real)
+
+    if not pd.api.types.is_numeric_dtype(df_vessel_real["ETA Vessel"]):
+        st.error("Error: Pastikan kolom ETA Vessel atau ETA Day di Excel sudah dalam format angka (Day-of-Year).")
+    else:
+        df_allocation_updated, df_restricted_blocks_updated = allocate_containers_with_updated_logic(df_vessel_real)
 
     # =================== VISUALIZATION FUNCTION ===================
     def visualize_yard(df_allocation, title):
