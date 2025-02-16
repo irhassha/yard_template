@@ -100,32 +100,50 @@ def allocate_containers_with_updated_logic(df_vessel):
     return pd.DataFrame(allocation), pd.DataFrame(restricted_info)
 
 # =================== STREAMLIT FILE UPLOADER ===================
-st.title("Yard Slot Allocation with Fixed ETA (Day-of-Year) & Flexible Blocks")
+st.title("Yard Slot Allocation with Plan A & B")
 
-uploaded_file = st.file_uploader("Upload Excel file with vessel data (ETA in Day-of-Year format)", type=["xlsx"])
+uploaded_file = st.file_uploader("Upload Excel file with vessel data", type=["xlsx"])
 
 if uploaded_file is not None:
     df_vessel_real = pd.read_excel(uploaded_file)
+    df_vessel_real = preprocess_eta_column(df_vessel_real)
 
-    # Pastikan ETA Vessel sudah dalam format Day-of-Year di Excel
-    df_vessel_real = preprocess_eta_column_flexible(df_vessel_real)
+    df_allocation_updated, df_restricted_blocks_updated = allocate_containers_with_updated_logic(df_vessel_real)
 
-    if not pd.api.types.is_numeric_dtype(df_vessel_real["ETA Vessel"]):
-        st.error("Error: Pastikan kolom ETA Vessel atau ETA Day di Excel sudah dalam format angka (Day-of-Year).")
-    else:
-        df_allocation_updated, df_restricted_blocks_updated = allocate_containers_with_updated_logic(df_vessel_real)
+    # =================== VISUALIZATION FUNCTION ===================
+    def visualize_yard(df_allocation, title):
+        vessel_names = df_allocation["Vessel Name"].unique()
+        colors = list(mcolors.TABLEAU_COLORS.values())[:len(vessel_names)]
+        vessel_color_map = {vessel: colors[i % len(colors)] for i, vessel in enumerate(vessel_names)}
 
-        # =================== DISPLAY DEBUGGING INFO ===================
-        st.subheader("Debugging Info: Restricted Blocks")
-        st.dataframe(df_restricted_blocks_updated)
+        fig, ax = plt.subplots(figsize=(total_columns_with_gaps * 0.2, total_height_with_larger_spacing * 0.8))
 
-        st.subheader("Final Slot Allocation")
-        st.dataframe(df_allocation_updated)
+        for i, section in enumerate(sections):
+            for j in range(rows_per_section):
+                row_label = f"{section}{str(j+1).zfill(2)}"
+                x_offset = i * (columns_per_section + gap_size)
 
-else:
-    st.write("Please upload an Excel file to proceed.")
-    
-        # =================== DISPLAY VISUALIZATION & DEBUGGING ===================
+                for k in range(columns_per_section):
+                    allocated_slots = df_allocation[(df_allocation["Block"] == row_label) & (df_allocation["Slot"] == k + 1)]
+                    color = vessel_color_map.get(allocated_slots.iloc[0]["Vessel Name"], "gray") if not allocated_slots.empty else "white"
+                    rect = plt.Rectangle((x_offset + k, total_height_with_larger_spacing - j - 2 - dock_spacing_blocks), 1, 1, edgecolor='black', facecolor=color, linewidth=1)
+                    ax.add_patch(rect)
+
+                ax.text(x_offset - 0.5, total_height_with_larger_spacing - j - 1.5 - dock_spacing_blocks, row_label, va='center', ha='right', fontsize=10, fontweight='bold')
+
+        ax.set_xlim(-1, total_columns_with_gaps)
+        ax.set_ylim(-dock_height - 2, total_height_with_larger_spacing)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_frame_on(False)
+
+        legend_handles = [plt.Line2D([0], [0], color=vessel_color_map[v], lw=4, label=v) for v in vessel_names]
+        ax.legend(handles=legend_handles, title="Vessel Assignments", loc="upper right")
+
+        st.subheader(title)
+        st.pyplot(fig)
+
+    # =================== DISPLAY VISUALIZATION & DEBUGGING ===================
     st.subheader("Plan A - Initial Allocation")
     visualize_yard(df_allocation_updated, "Plan A - Initial Allocation")
 
